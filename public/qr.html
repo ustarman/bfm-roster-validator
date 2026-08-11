@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/jpeg" href="assets/auspost-logo.jpg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BFM Roster Validator — QR code</title>
+    <style>
+      :root {
+        --ap-red: #e11b22;
+        --ap-red-gradient: linear-gradient(150deg, #e11b22 0%, #e11b22 55%, #e4451e 100%);
+        --page-bg: #f4f4f4;
+        --card-bg: #ffffff;
+        --card-border: #e6e6e6;
+        --text: #1d1d1d;
+        --subtext: #6b6b6b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page-bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      header {
+        position: relative;
+        background: var(--ap-red-gradient);
+        color: #fff;
+        padding: 20px 24px 62px;
+        text-align: center;
+      }
+      .app-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .logo-chip {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .logo-chip img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .app-bar h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      header p {
+        margin: 10px 0 0;
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .swoosh {
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        width: 100%;
+        height: 56px;
+        display: block;
+      }
+      main {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 20px 40px;
+        margin-top: -34px;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 0.5px solid var(--card-border);
+        border-radius: 20px;
+        padding: 32px;
+        max-width: 380px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+      }
+      .card svg {
+        width: 240px;
+        height: 240px;
+        display: block;
+        margin: 0 auto 20px;
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+      }
+      .card p.caption {
+        margin: 0 0 14px;
+        font-size: 14px;
+        color: var(--subtext);
+      }
+      .url-box {
+        display: inline-block;
+        padding: 10px 16px;
+        background: #fafafa;
+        border: 0.5px solid var(--card-border);
+        border-radius: 10px;
+        font-size: 13px;
+        word-break: break-all;
+      }
+      .url-box a {
+        color: var(--ap-red);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .download-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 18px;
+        padding: 11px 20px;
+        background: var(--ap-red);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .download-btn:active {
+        background: #c5161c;
+      }
+      footer {
+        text-align: center;
+        padding: 14px;
+        font-size: 12px;
+        color: var(--subtext);
+      }
+      @media print {
+        header,
+        footer {
+          display: none;
+        }
+        body {
+          background: #fff;
+        }
+        main {
+          margin-top: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="app-bar">
+        <span class="logo-chip"><img src="assets/auspost-logo.jpg" alt="Australia Post" /></span>
+        <h1>BFM Roster Validator</h1>
+      </div>
+      <p>Scan to open</p>
+      <svg class="swoosh" viewBox="0 0 330 56" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0,56 L0,14 C95,40 210,52 330,44 L330,56 Z" fill="var(--page-bg)" />
+      </svg>
+    </header>
+    <main>
+      <div class="card">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 49 49" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h49v49H0z"/><path stroke="#E11B22" d="M4 4.5h7m1 0h3m2 0h1m2 0h1m1 0h2m1 0h3m2 0h2m1 0h1m1 0h1m2 0h7M4 5.5h1m5 0h1m6 0h2m1 0h1m4 0h1m1 0h1m1 0h1m1 0h1m2 0h3m1 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m2 0h3m9 0h1m2 0h1m4 0h2m3 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h2m1 0h1m1 0h1m1 0h2m2 0h1m1 0h1m1 0h2m3 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m2 0h1m1 0h1m2 0h6m2 0h2m1 0h1m1 0h1m2 0h3m1 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m2 0h3m1 0h1m2 0h1m1 0h1m3 0h1m1 0h1m2 0h1m1 0h3m2 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M13 11.5h1m3 0h1m1 0h1m3 0h5m2 0h1m2 0h2M6 12.5h1m1 0h3m1 0h2m4 0h1m2 0h1m1 0h1m1 0h1m3 0h1m2 0h2m3 0h1m3 0h1m2 0h1M4 13.5h1m1 0h2m3 0h1m1 0h1m2 0h2m1 0h1m1 0h1m3 0h3m4 0h1m1 0h1m1 0h1m1 0h1m2 0h4M8 14.5h1m1 0h2m1 0h1m4 0h3m1 0h1m1 0h4m2 0h1m1 0h2m3 0h1m1 0h1m2 0h3M4 15.5h2m1 0h1m3 0h1m1 0h1m4 0h1m3 0h2m2 0h1m1 0h1m4 0h1m2 0h4m3 0h1M4 16.5h2m1 0h1m1 0h2m4 0h3m1 0h1m2 0h2m1 0h2m1 0h1m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m1 0h2M4 17.5h1m1 0h2m4 0h1m4 0h3m1 0h2m2 0h1m1 0h7m1 0h1m1 0h1m4 0h3M5 18.5h2m1 0h1m1 0h2m3 0h2m2 0h2m1 0h4m1 0h1m1 0h5m4 0h3m3 0h1M5 19.5h2m2 0h1m1 0h3m5 0h4m2 0h1m4 0h1m1 0h2m1 0h1m2 0h4M5 20.5h3m1 0h2m2 0h1m1 0h1m1 0h1m2 0h1m1 0h3m1 0h1m1 0h1m2 0h3m2 0h1m1 0h2m3 0h1M4 21.5h1m2 0h3m1 0h1m1 0h1m1 0h3m1 0h3m1 0h3m1 0h2m3 0h2m4 0h1m3 0h3M4 22.5h1m3 0h1m1 0h5m2 0h1m1 0h3m1 0h1m1 0h2m2 0h2m3 0h1m1 0h3m1 0h5M5 23.5h2m5 0h2m2 0h2m3 0h5m1 0h1m1 0h1m1 0h1m1 0h2m2 0h1m1 0h1M4 24.5h1m2 0h1m2 0h1m1 0h1m3 0h1m1 0h1m6 0h3m3 0h2m1 0h1m1 0h3m1 0h2m2 0h1M4 25.5h3m4 0h1m1 0h1m6 0h1m2 0h1m8 0h3m1 0h4m2 0h3M6 26.5h1m2 0h3m2 0h1m1 0h1m4 0h5m1 0h2m4 0h2m2 0h3m1 0h1m1 0h2M4 27.5h1m1 0h2m1 0h1m4 0h1m1 0h2m2 0h2m1 0h1m1 0h1m2 0h1m1 0h1m1 0h6m2 0h1m2 0h1M5 28.5h1m4 0h1m3 0h2m2 0h1m1 0h1m1 0h1m1 0h2m1 0h5m1 0h1m2 0h4m1 0h1m2 0h1M5 29.5h2m1 0h2m3 0h1m2 0h2m1 0h2m1 0h2m1 0h3m1 0h2m1 0h1m1 0h1m2 0h2m5 0h1M6 30.5h1m2 0h2m1 0h1m1 0h2m1 0h1m2 0h1m1 0h1m1 0h2m3 0h2m3 0h1m3 0h2m2 0h3M5 31.5h1m3 0h1m3 0h1m1 0h2m1 0h1m1 0h3m1 0h2m5 0h1m1 0h2m1 0h1m3 0h1M4 32.5h2m3 0h2m1 0h3m4 0h1m4 0h2m1 0h1m1 0h1m3 0h1m1 0h2m1 0h1m2 0h1m2 0h1M5 33.5h1m1 0h1m7 0h2m1 0h1m1 0h1m4 0h3m3 0h1m1 0h1m1 0h2m5 0h3M4 34.5h1m1 0h1m1 0h1m1 0h4m2 0h2m1 0h1m1 0h1m1 0h3m3 0h1m4 0h3m2 0h1m3 0h2M5 35.5h1m2 0h1m2 0h2m1 0h1m1 0h2m2 0h1m1 0h2m1 0h2m1 0h4m1 0h2m1 0h3m4 0h2M4 36.5h1m1 0h3m1 0h1m6 0h1m9 0h1m4 0h2m1 0h6m2 0h2M12 37.5h2m3 0h2m4 0h1m6 0h1m1 0h1m3 0h1m3 0h2m1 0h2M4 38.5h7m3 0h1m1 0h2m6 0h2m6 0h2m1 0h2m1 0h1m1 0h1m2 0h2M4 39.5h1m5 0h1m1 0h1m1 0h1m2 0h3m1 0h1m3 0h1m2 0h5m3 0h1m3 0h1M4 40.5h1m1 0h3m1 0h1m1 0h3m1 0h1m2 0h2m1 0h1m1 0h1m4 0h4m3 0h5m2 0h1M4 41.5h1m1 0h3m1 0h1m2 0h4m1 0h1m2 0h2m6 0h1m3 0h1m3 0h1m2 0h2m2 0h1M4 42.5h1m1 0h3m1 0h1m1 0h2m2 0h1m2 0h2m1 0h2m1 0h1m1 0h1m7 0h2m2 0h2m3 0h1M4 43.5h1m5 0h1m2 0h2m1 0h2m5 0h1m3 0h3m2 0h2m2 0h4m1 0h1m1 0h1M4 44.5h7m5 0h1m4 0h4m2 0h1m1 0h5m1 0h2m1 0h3m2 0h2"/></svg>
+        <p class="caption">Point your phone's camera at this code, or use the link below.</p>
+        <div class="url-box">
+          <a href="https://ustarman.github.io/bfm-roster-validator/">ustarman.github.io/bfm-roster-validator</a>
+        </div>
+        <br />
+        <a class="download-btn" href="bfm-roster-validator-qr.png" download="BFM-Roster-Validator-QR.png">
+          ⬇ Download QR code
+        </a>
+      </div>
+    </main>
+    <footer>Australia Post — internal roster tool</footer>
+  </body>
+</html>
