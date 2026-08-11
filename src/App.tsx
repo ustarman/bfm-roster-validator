@@ -138,7 +138,13 @@ export default function App() {
         <div className="header-inner">
           <div className="app-bar">
             <span className="logo-chip">
-              <img src="/assets/auspost-logo.jpg" alt="Australia Post" width={26} height={26} style={{ objectFit: 'cover' }} />
+              <img
+                src={`${import.meta.env.BASE_URL}assets/auspost-logo.jpg`}
+                alt="Australia Post"
+                width={26}
+                height={26}
+                style={{ objectFit: 'cover' }}
+              />
             </span>
             <h1>BFM Roster Validator</h1>
             <div className="spacer" />
