@@ -176,11 +176,153 @@
           <a href="https://ustarman.github.io/bfm-roster-validator/">ustarman.github.io/bfm-roster-validator</a>
         </div>
         <br />
-        <a class="download-btn" href="bfm-roster-validator-qr.png" download="BFM-Roster-Validator-QR.png">
+        <a id="downloadBtn" class="download-btn" href="bfm-roster-validator-qr.png" download="BFM-Roster-Validator-QR.png">
           ⬇ Download QR code
         </a>
       </div>
     </main>
     <footer>Australia Post — internal roster tool</footer>
+    <script>
+      // Composes the whole branded card (logo, headline, QR, link) into one
+      // PNG so the download is a shareable image, not just the bare QR matrix.
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = src;
+        });
+      }
+
+      function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      async function buildShareImage() {
+        const W = 640;
+        const headerH = 170;
+        const cardW = 520;
+        const cardX = (W - cardW) / 2;
+        const cardY = headerH - 40;
+        const qrSize = 340;
+        const padTop = 40;
+        const cardH = padTop + qrSize + 30 + 44 + 24 + 50 + 40;
+        const H = cardY + cardH + 60;
+
+        const canvas = document.createElement('canvas');
+        const scale = 2; // export at 2x for a crisp print/email image
+        canvas.width = W * scale;
+        canvas.height = H * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        ctx.textBaseline = 'middle';
+
+        ctx.fillStyle = '#F4F4F4';
+        ctx.fillRect(0, 0, W, H);
+
+        const grad = ctx.createLinearGradient(0, 0, W, headerH);
+        grad.addColorStop(0, '#E11B22');
+        grad.addColorStop(0.55, '#E11B22');
+        grad.addColorStop(1, '#E4451E');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, headerH);
+
+        // swoosh — asymmetric concave sweep cut out of the header's bottom edge
+        ctx.beginPath();
+        ctx.moveTo(0, headerH);
+        ctx.lineTo(0, headerH - 28);
+        ctx.bezierCurveTo(W * 0.29, headerH - 2, W * 0.64, headerH - 12, W, headerH - 22);
+        ctx.lineTo(W, headerH);
+        ctx.closePath();
+        ctx.fillStyle = '#F4F4F4';
+        ctx.fill();
+
+        const logoImg = await loadImage('assets/auspost-logo.jpg');
+        const chipR = 17;
+        const chipX = W / 2 - 92;
+        const chipY = 42;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(chipX, chipY, chipR, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.clip();
+        ctx.drawImage(logoImg, chipX - chipR, chipY - chipR, chipR * 2, chipR * 2);
+        ctx.restore();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 18px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('BFM Roster Validator', chipX + chipR + 10, chipY);
+
+        ctx.textAlign = 'center';
+        ctx.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText('Scan to open', W / 2, 100);
+
+        roundRect(ctx, cardX, cardY, cardW, cardH, 20);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.strokeStyle = '#E6E6E6';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        const qrImg = await loadImage('bfm-roster-validator-qr.png');
+        const qrX = cardX + (cardW - qrSize) / 2;
+        const qrY = cardY + padTop;
+        ctx.strokeStyle = '#E6E6E6';
+        ctx.strokeRect(qrX - 1, qrY - 1, qrSize + 2, qrSize + 2);
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+        let y = qrY + qrSize + 30;
+        ctx.fillStyle = '#6B6B6B';
+        ctx.font = '400 15px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText("Point your phone's camera at this code,", W / 2, y);
+        ctx.fillText('or use the link below.', W / 2, y + 22);
+
+        y += 22 + 38;
+        const urlText = 'ustarman.github.io/bfm-roster-validator';
+        ctx.font = '600 15px -apple-system, BlinkMacSystemFont, sans-serif';
+        const urlW = ctx.measureText(urlText).width + 40;
+        roundRect(ctx, W / 2 - urlW / 2, y - 22, urlW, 44, 10);
+        ctx.fillStyle = '#FAFAFA';
+        ctx.fill();
+        ctx.strokeStyle = '#E6E6E6';
+        ctx.stroke();
+        ctx.fillStyle = '#E11B22';
+        ctx.fillText(urlText, W / 2, y);
+
+        ctx.fillStyle = '#6B6B6B';
+        ctx.font = '400 13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText('Australia Post — internal roster tool', W / 2, H - 24);
+
+        return canvas;
+      }
+
+      const downloadBtn = document.getElementById('downloadBtn');
+      downloadBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const original = downloadBtn.textContent;
+        downloadBtn.textContent = 'Preparing…';
+        try {
+          const canvas = await buildShareImage();
+          canvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'BFM-Roster-Validator-QR.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }, 'image/png');
+        } finally {
+          downloadBtn.textContent = original;
+        }
+      });
+    </script>
   </body>
 </html>
