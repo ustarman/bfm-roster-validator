@@ -78,7 +78,7 @@ export function LineGrid({ lines, mode, selectedLineId, onSelect, onChange }: Pr
                 })}
                 <td className="num muted">{r.daysOn}</td>
                 <td className="num">{r.weeklyWorkMins ? fmtHours(r.weeklyWorkMins) : ''}</td>
-                <td>
+                <td className="center">
                   {r.status === 'breach' && <span className="flag">✕</span>}
                   {r.status === 'incomplete' && <span className="flag warn">?</span>}
                 </td>

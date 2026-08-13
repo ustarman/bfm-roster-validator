@@ -98,12 +98,12 @@ export function RosterGrid({
         </td>
         <td className="num">{st.workMins ? fmtHours(st.workMins) : ''}</td>
         <td className="num muted">{st.restMins || ''}</td>
-        <td>{st.nightRestBreak ? <span className="tick">✓</span> : ''}</td>
-        <td>{st.rest24 ? <span className="tick">✓</span> : ''}</td>
+        <td className="center">{st.nightRestBreak ? <span className="tick">✓</span> : ''}</td>
+        <td className="center">{st.rest24 ? <span className="tick">✓</span> : ''}</td>
         <td className="num muted">{fmtHours(st.since24RestMins)}</td>
         <td className="num muted">{fmtHours(st.rolling7NightMins)}</td>
         <td className="num muted">{fmtHours(st.rolling14WorkMins)}</td>
-        <td>
+        <td className="center">
           {bad ? <span className="flag">✕</span> : warn ? <span className="flag warn">!</span> : ''}
           {focusedDate === date && hint ? <span className="hint" style={{ marginLeft: 8 }}>{hint}</span> : null}
         </td>
@@ -138,8 +138,12 @@ export function RosterGrid({
             <th className="num" title="Rest that must be taken inside the shift">
               Rest min
             </th>
-            <th title="7 continuous hours rest between 10pm and 8am">Night rest</th>
-            <th title="24 continuous hours stationary rest">24h break</th>
+            <th className="center" title="7 continuous hours rest between 10pm and 8am">
+              Night rest
+            </th>
+            <th className="center" title="24 continuous hours stationary rest">
+              24h break
+            </th>
             <th
               className="num"
               title="Work time since the last 24-hour break — limit 84h. Resets to zero once a full 24 hours off is taken."

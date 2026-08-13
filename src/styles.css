@@ -272,12 +272,20 @@ table.roster th {
   text-align: left;
   padding: 10px 12px;
   border-bottom: 1px solid var(--card-border);
-  white-space: nowrap;
+  /* Wrap rather than truncate — a column narrower than its own label should
+     grow the header row, never hide part of the label behind an ellipsis. */
+  white-space: normal;
+  line-height: 1.3;
 }
 
 table.roster th.num,
 table.roster td.num {
   text-align: right;
+}
+
+table.roster th.center,
+table.roster td.center {
+  text-align: center;
 }
 
 table.roster td {
