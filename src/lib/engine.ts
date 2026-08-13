@@ -12,9 +12,9 @@
  *   14 days — max 144h work time; 24 continuous hours rest taken after no more
  *             than 84h work; 4 night rest breaks, 2 of them on consecutive days
  *
- * Rules 1-3 (rest inside a shift) are not validated here — they are *satisfied
- * by construction*, because work time is derived as span minus the minimum rest
- * those rules force. See inshift.ts.
+ * Rules 1-3 (rest inside a shift) are not validated here — every duty carries a
+ * 60-minute break, which clears all three outright. Work time is the span less
+ * that hour. See inshift.ts.
  */
 
 import { shiftRest } from './inshift';
@@ -54,10 +54,6 @@ export const LIMITS = {
 } as const;
 
 export const RULE_TEXT: Record<RuleId, { title: string; law: string }> = {
-  SHIFT_TOO_LONG: {
-    title: 'Shift span',
-    law: 'In any 24 hours a solo driver may work at most 14 hours. A span longer than that forces extra in-shift rest.',
-  },
   R4_24H_WORK: {
     title: '24-hour rule — maximum work time',
     law: 'In any period of 24 hours: maximum 14 hours work time.',
@@ -374,7 +370,15 @@ export function validate(driver: Driver, opts: ValidateOptions): ValidationResul
   const spans = mergeSpans(segs);
   const rests = freeIntervals(spans, rangeStart, rangeEnd);
   const longNight = longNightIntervals(segs);
-  const nights = nightRestNights(rests, dates);
+  // The last day's night rest break runs to 08:00 the morning after the window
+  // closes, so it needs rest intervals computed past `rangeEnd` — otherwise the
+  // final night can never qualify and the fortnight is reported one short.
+  const nightRests = freeIntervals(
+    spans,
+    rangeStart,
+    Math.max(rangeEnd, dayStartMs(addDays(opts.to, 1)) + 8 * HOUR),
+  );
+  const nights = nightRestNights(nightRests, dates);
 
   const findings: Finding[] = [];
   const add = (f: Finding) => findings.push(f);
@@ -469,14 +473,16 @@ export function validate(driver: Driver, opts: ValidateOptions): ValidationResul
 
   // --- 14 days: 24-hour rest must follow no more than 84 hours work ---------
   const rest24Blocks = rests.filter((r) => r.endMs - r.startMs >= LIMITS.rest24hBlock * MIN);
-  const since24 = trackWorkBetween24hRests(workIvs, rest24Blocks, rangeStart, rangeEnd);
-  for (const b of since24.breaches) {
+  for (const b of trackWorkBetween24hRests(workIvs, rest24Blocks, rangeStart, rangeEnd)) {
     add({
       ruleId: 'R6_84H_RESET',
       severity: 'violation',
       dates: datesIn(b.startMs, b.endMs),
       title: RULE_TEXT.R6_84H_RESET.title,
-      detail: `${fmtDuration(b.actual)} work time since the last 24-hour rest (ended ${fmtDateTime(b.startMs)}) with no 24-hour rest taken — a 24-hour continuous rest is due after 84h.`,
+      detail:
+        b.startMs <= rangeStart
+          ? `${fmtDuration(b.actual)} work time from the start of this window to ${fmtDateTime(b.endMs)} with no 24-hour rest taken — a 24-hour continuous rest is due after 84h.`
+          : `${fmtDuration(b.actual)} work time since the last 24-hour rest (ended ${fmtDateTime(b.startMs)}) with no 24-hour rest taken — a 24-hour continuous rest is due after 84h.`,
       windowStartMs: b.startMs,
       windowEndMs: b.endMs,
       actualMins: b.actual,
@@ -513,21 +519,6 @@ export function validate(driver: Driver, opts: ValidateOptions): ValidationResul
     }
   }
   dedupeNightRestFindings(findings);
-
-  // --- shifts long enough that the 14-hour cap bites ------------------------
-  for (const s of segs) {
-    const spanMins = (s.endMs - s.startMs) / MIN;
-    if (spanMins - s.restMins >= LIMITS.work24 - 1e-6 && s.restMins > 60) {
-      add({
-        ruleId: 'SHIFT_TOO_LONG',
-        severity: 'warning',
-        dates: [s.date],
-        title: RULE_TEXT.SHIFT_TOO_LONG.title,
-        detail: `A ${fmtDuration(spanMins)} span caps out at 14h work time, so this shift needs ${fmtDuration(s.restMins)} of rest inside it.`,
-        actualMins: spanMins,
-      });
-    }
-  }
 
   // --- warn when the history the rules need has not been entered ------------
   const filled = dates.filter((d) => {
@@ -569,7 +560,7 @@ export function validate(driver: Driver, opts: ValidateOptions): ValidationResul
       rest24: rest24Blocks.some((r) => r.endMs > dStart && r.startMs < dEnd),
       rolling7NightMins: integrate(longNight, dEnd - 7 * DAY, dEnd),
       rolling14WorkMins: integrate(workIvs, dEnd - 14 * DAY, dEnd),
-      since24RestMins: since24.atDayEnd.get(date) ?? 0,
+      since24RestMins: workSince24hRest(workIvs, rest24Blocks, dEnd, rangeStart),
     };
   }
 
@@ -586,45 +577,72 @@ export function validate(driver: Driver, opts: ValidateOptions): ValidationResul
   return { findings, stats, violationDates, warningDates };
 }
 
-/** Only report the first (earliest) night-rest finding per rule kind — the
- *  rolling windows would otherwise repeat the same problem 14 times. */
+/**
+ * The rolling 14-day windows overlap heavily, so one shortfall surfaces in up to
+ * eight of them. Keep only the most severe — fewest night rest breaks, and on a
+ * tie the latest window, which is the one closest to the week being planned.
+ */
 function dedupeNightRestFindings(findings: Finding[]): void {
-  let seen = false;
-  for (let i = 0; i < findings.length; i++) {
-    if (findings[i].ruleId !== 'R6_NIGHT_RESTS') continue;
-    if (seen) findings.splice(i--, 1);
-    else seen = true;
+  const hits = findings.map((_, i) => i).filter((i) => findings[i].ruleId === 'R6_NIGHT_RESTS');
+  if (hits.length <= 1) return;
+  const score = (i: number) => findings[i].actualMins ?? LIMITS.nightRestsPer14d;
+  let keep = hits[0];
+  for (const i of hits) if (score(i) <= score(keep)) keep = i;
+  for (let i = findings.length - 1; i >= 0; i--) {
+    if (findings[i].ruleId === 'R6_NIGHT_RESTS' && i !== keep) findings.splice(i, 1);
   }
 }
 
 /**
- * Walk the timeline accumulating work since the end of the last 24-hour rest.
- * History before the first 24-hour rest in range is unknown, so the counter
- * only starts there.
+ * Walk the timeline accumulating work since the end of the last 24-hour rest,
+ * and flag every stretch that passes 84 hours before the next one is taken.
+ *
+ * Counting starts at the beginning of the window rather than at the first
+ * 24-hour rest inside it. Whatever the driver worked before the window can only
+ * push the real counter higher, so starting from zero here under-counts and can
+ * never raise a breach that is not there — while still catching a fortnight
+ * that contains no 24-hour rest at all.
  */
 function trackWorkBetween24hRests(
   workIvs: Iv[],
   rest24Blocks: { startMs: number; endMs: number }[],
   rangeStart: number,
   rangeEnd: number,
-): { breaches: Breach[]; atDayEnd: Map<string, number> } {
+): Breach[] {
   const breaches: Breach[] = [];
-  const atDayEnd = new Map<string, number>();
-  if (!rest24Blocks.length) return { breaches, atDayEnd };
-
-  const bounds = [...rest24Blocks].sort((a, b) => a.startMs - b.startMs);
-  let cursor = bounds[0].endMs;
-  for (let i = 1; i <= bounds.length; i++) {
-    const nextRestStart = i < bounds.length ? bounds[i].startMs : rangeEnd;
-    const worked = integrate(workIvs, cursor, nextRestStart);
-    if (worked > LIMITS.workBefore24Rest + 1e-6) {
-      breaches.push({ startMs: cursor, endMs: nextRestStart, actual: worked });
+  let cursor = rangeStart;
+  for (let i = 0; i <= rest24Blocks.length; i++) {
+    const nextRestStart = i < rest24Blocks.length ? rest24Blocks[i].startMs : rangeEnd;
+    if (nextRestStart > cursor) {
+      const worked = integrate(workIvs, cursor, nextRestStart);
+      if (worked > LIMITS.workBefore24Rest + 1e-6) {
+        breaches.push({ startMs: cursor, endMs: nextRestStart, actual: worked });
+      }
     }
-    for (let d = fmtDate(new Date(cursor)); dayStartMs(d) < nextRestStart; d = addDays(d, 1)) {
-      const end = Math.min(dayStartMs(addDays(d, 1)), nextRestStart);
-      if (dayStartMs(d) >= rangeStart) atDayEnd.set(d, integrate(workIvs, cursor, end));
-    }
-    if (i < bounds.length) cursor = bounds[i].endMs;
+    if (i < rest24Blocks.length) cursor = rest24Blocks[i].endMs;
   }
-  return { breaches, atDayEnd };
+  return breaches;
+}
+
+/**
+ * Work accumulated towards the 84-hour limit as at the end of a given day.
+ *
+ * Reads zero while the driver is still on a qualifying 24-hour break, since
+ * that break is precisely what clears the counter — otherwise a night shift
+ * that finishes on the morning of a rostered day off would leave the day
+ * showing the pre-break total and look as though the RDO reset nothing.
+ */
+function workSince24hRest(
+  workIvs: Iv[],
+  rest24Blocks: { startMs: number; endMs: number }[],
+  dayEndMs: number,
+  rangeStart: number,
+): number {
+  let from = rangeStart;
+  for (const r of rest24Blocks) {
+    if (r.startMs >= dayEndMs) break;
+    if (r.endMs >= dayEndMs) return 0;
+    from = r.endMs;
+  }
+  return integrate(workIvs, from, dayEndMs);
 }

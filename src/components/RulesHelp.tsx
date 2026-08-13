@@ -8,13 +8,13 @@ const BLOCKS: Block[] = [
   {
     title: 'How work time is worked out from the times you type',
     plain:
-      'The regulation fixes how much rest has to sit inside a shift purely from how long the shift is: 15 minutes once a shift passes 6h15, 30 minutes past 9 hours, 60 minutes past 12 hours. So a start and a finish are enough — work time is the span minus the rest that span forces. A 10-hour span is 9h30 of work time; a 15h05 span is 14 hours, the most a solo driver can do.',
+      'Work time is clock on to clock off, less the duty\'s break. Duties up to 11h30 of span carry 30 minutes; longer ones carry an hour — the same two sizes the linehaul roster uses. The switch at 11h30 is where a 30-minute break would leave more than 11 hours of work, which the 12-hour rule does not allow. Note this means a longer duty can show less work time: an 11h30 span is 11 hours of work, an 11h40 span only 10h40, because it buys the full hour\'s break.',
     law: 'In any 6¼ hours: 6 hours work time. In any 9 hours: 8½ hours. In any 12 hours: 11 hours.',
   },
   {
     title: '24-hour rule — 14 hours work, 7 hours continuous rest',
     plain:
-      'Across any 24 hours a driver may work 14 hours, and must get 7 unbroken hours of stationary rest. The 24 hours are counted from the moment work starts after a major break — so a working day has to finish within 17 hours of starting. If two shifts are less than 7 hours apart they count as one working day, which is how a short turnaround turns into a breach.',
+      'Across any 24 hours a driver may work 14 hours, and must get 7 unbroken hours of stationary rest. With the hour\'s break on a long duty that puts the longest legal one at a 15-hour span. The 24 hours are counted from the moment work starts after a major break, so a working day also has to finish within 17 hours of starting. If two shifts are less than 7 hours apart they count as one working day, which is how a short turnaround turns into a breach.',
     law: 'In any period of 24 hours: maximum 14 hours work time, minimum 7 continuous hours stationary rest time.',
   },
   {
@@ -26,13 +26,13 @@ const BLOCKS: Block[] = [
   {
     title: '14-day rule — 144 hours work',
     plain:
-      'The total of all work time over any 14 consecutive days. The 14-day column in the grid shows where each day sits against it.',
+      'The total of all work time over any 14 consecutive days. This one is a hard ceiling and nothing resets it — days off simply drop out of the back of the rolling fortnight as it moves. The 14-day column in the grid shows where each day sits against it.',
     law: 'In any period of 14 days: maximum 144 hours work time.',
   },
   {
     title: '14-day rule — a 24-hour break after no more than 84 hours',
     plain:
-      'Somewhere in every 14 days the driver needs a full 24 hours off, and it has to come before they have piled up 84 hours of work since the last one. Two consecutive rostered days off will normally satisfy it; so will a long weekend break.',
+      'Somewhere in every 14 days the driver needs a full 24 hours off, and it has to come before they have piled up 84 hours of work since the last one. The "Since 24h" column tracks that running total and drops back to zero the moment a qualifying break is taken. Watch the gap rather than the day off: a night shift finishing at 08:00 on a rostered day off, back on at 06:00 the next morning, is only 22 hours — the day off is on the roster but the reset is not earned.',
     law: 'In any period of 14 days: 24 continuous hours stationary rest time taken after no more than 84 hours work time.',
   },
   {
@@ -44,7 +44,7 @@ const BLOCKS: Block[] = [
   {
     title: 'What the app assumes',
     plain:
-      'Blank days are treated as rest days — so the two history weeks need to be filled in before the 7-day and 14-day figures mean anything. Work time assumes the driver takes exactly the rest the law requires inside the shift and no more, which is the cautious reading: if they take longer breaks, real work time is lower than shown. Times are read in the driver\'s base time zone.',
+      'Blank days are treated as rest days — so the two history weeks need to be filled in before the 7-day and 14-day figures mean anything. Work time assumes the duty\'s rostered break and nothing more: if a driver takes longer, their real work time is lower than shown. Times are read in the driver\'s base time zone.',
     law: 'Stationary rest time is time spent out of a regulated heavy vehicle, or in an approved sleeper berth of a stationary regulated heavy vehicle.',
   },
 ];

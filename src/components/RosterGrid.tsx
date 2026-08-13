@@ -49,7 +49,7 @@ export function RosterGrid({
       const weekNo = Math.floor(i / 7) + 1;
       rows.push(
         <tr className={`week-head${planning ? ' planning' : ''}`} key={`h${date}`}>
-          <td colSpan={11}>
+          <td colSpan={12}>
             {planning ? 'Week being planned' : `History — week ${weekNo} of 2`} · {fmtDayMonth(date)}
           </td>
         </tr>,
@@ -100,6 +100,7 @@ export function RosterGrid({
         <td className="num muted">{st.restMins || ''}</td>
         <td>{st.nightRestBreak ? <span className="tick">✓</span> : ''}</td>
         <td>{st.rest24 ? <span className="tick">✓</span> : ''}</td>
+        <td className="num muted">{fmtHours(st.since24RestMins)}</td>
         <td className="num muted">{fmtHours(st.rolling7NightMins)}</td>
         <td className="num muted">{fmtHours(st.rolling14WorkMins)}</td>
         <td>
@@ -113,6 +114,20 @@ export function RosterGrid({
   return (
     <div className="grid-wrap">
       <table className="roster">
+        <colgroup>
+          <col style={{ width: 46 }} />
+          <col style={{ width: 118 }} />
+          <col style={{ width: 110 }} />
+          <col style={{ width: 110 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 100 }} />
+          <col style={{ width: 100 }} />
+          <col style={{ width: 100 }} />
+          <col style={{ width: 140 }} />
+        </colgroup>
         <thead>
           <tr>
             <th className="num">#</th>
@@ -125,6 +140,12 @@ export function RosterGrid({
             </th>
             <th title="7 continuous hours rest between 10pm and 8am">Night rest</th>
             <th title="24 continuous hours stationary rest">24h break</th>
+            <th
+              className="num"
+              title="Work time since the last 24-hour break — limit 84h. Resets to zero once a full 24 hours off is taken."
+            >
+              Since 24h
+            </th>
             <th className="num" title="Long/night work time in the 7 days ending on this day — limit 36h">
               7-day night
             </th>

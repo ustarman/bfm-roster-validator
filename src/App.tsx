@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Swoosh } from './components/Swoosh';
 import { RosterGrid } from './components/RosterGrid';
 import { FindingsPanel } from './components/FindingsPanel';
+import { DriverSummary } from './components/DriverSummary';
 import { RulesHelp } from './components/RulesHelp';
 import { ImportDialog } from './components/ImportDialog';
 import { ConfirmDialog, PromptDialog } from './components/Dialog';
+import { LineGrid } from './components/LineGrid';
+import { LineDetail } from './components/LineDetail';
 import { validate } from './lib/engine';
 import { earliestStart, latestFinish } from './lib/suggest';
-import { download, toCsv } from './lib/csv';
+import { download, linesToCsv, toCsv } from './lib/csv';
+import { blankLine, seedLines, validateLine, type DaylightMode, type DutyLine } from './lib/lines';
 import { load, newDriver, save, setDay, type AppState } from './lib/storage';
 import { DAY_CODES, type Driver, type RosterDay } from './lib/types';
 import { addDays, fmtDayMonth, todayISO, weekStart } from './lib/time';
@@ -24,6 +28,7 @@ type DialogState =
   | { kind: 'rename-driver' }
   | { kind: 'remove-driver' }
   | { kind: 'clear-week' }
+  | { kind: 'reset-lines' }
   | null;
 
 export default function App() {
@@ -132,6 +137,50 @@ export default function App() {
 
   const violations = result.findings.filter((f) => f.severity === 'violation').length;
 
+  /* ------------------------------------------------------------ duty lines */
+
+  const lineMode = state.lineDaylightMode;
+  const currentLines = state.lines[lineMode];
+  const selectedLine = currentLines.find((l) => l.id === state.selectedLineId) ?? currentLines[0];
+
+  const lineSummary = useMemo(() => {
+    let breach = 0;
+    let incomplete = 0;
+    for (const l of currentLines) {
+      const status = validateLine(l, lineMode).status;
+      if (status === 'breach') breach++;
+      else if (status === 'incomplete') incomplete++;
+    }
+    return { total: currentLines.length, breach, incomplete, ok: currentLines.length - breach - incomplete };
+  }, [currentLines, lineMode]);
+
+  function updateLines(mode: DaylightMode, next: DutyLine[]) {
+    setState((s) => ({ ...s, lines: { ...s.lines, [mode]: next } }));
+  }
+
+  function onLineCellChange(lineId: string, dayIndex: number, value: string) {
+    updateLines(
+      lineMode,
+      currentLines.map((l) => (l.id === lineId ? { ...l, week: l.week.map((c, i) => (i === dayIndex ? value : c)) } : l)),
+    );
+  }
+
+  function switchLineMode(next: DaylightMode) {
+    setState((s) => ({ ...s, lineDaylightMode: next, selectedLineId: s.lines[next][0]?.id ?? null }));
+  }
+
+  function addLine() {
+    const nextNumber = Math.max(0, ...currentLines.map((l) => l.number)) + 1;
+    const l = blankLine(nextNumber);
+    updateLines(lineMode, [...currentLines, l]);
+    setState((s) => ({ ...s, selectedLineId: l.id }));
+  }
+
+  function resetLines() {
+    updateLines(lineMode, seedLines(lineMode));
+    setDialog(null);
+  }
+
   return (
     <>
       <header className="header">
@@ -141,24 +190,30 @@ export default function App() {
               <img
                 src={`${import.meta.env.BASE_URL}assets/auspost-logo.jpg`}
                 alt="Australia Post"
-                width={26}
-                height={26}
+                width={30}
+                height={30}
                 style={{ objectFit: 'cover' }}
               />
             </span>
             <h1>BFM Roster Validator</h1>
             <div className="spacer" />
-            <button className="btn ghost small" onClick={() => setShowRules(true)}>
+            <button className="btn ghost" onClick={() => setShowRules(true)}>
               Rules
             </button>
           </div>
           <p className="headline">
-            {violations
-              ? `${violations} BFM breach${violations === 1 ? '' : 'es'} in ${driver.name}'s roster`
-              : `${driver.name}'s roster is within BFM limits`}
+            {state.appMode === 'drivers'
+              ? violations
+                ? `${violations} BFM breach${violations === 1 ? '' : 'es'} in ${driver.name}'s roster`
+                : `${driver.name}'s roster is within BFM limits`
+              : lineSummary.breach
+                ? `${lineSummary.breach} of ${lineSummary.total} duty lines breach BFM`
+                : `All ${lineSummary.total} duty lines are within BFM limits`}
           </p>
           <p className="headline-sub">
-            Planning week of {fmtDayMonth(planningFrom)} · checked against the {HISTORY_WEEKS} weeks before it
+            {state.appMode === 'drivers'
+              ? `Planning week of ${fmtDayMonth(planningFrom)} · checked against the ${HISTORY_WEEKS} weeks before it`
+              : 'Linehaul duty lines · checked as a repeating weekly pattern'}
           </p>
         </div>
         <Swoosh />
@@ -167,84 +222,190 @@ export default function App() {
       <main className="shell">
         <div className="card">
           <div className="row">
-            <div className="driver-tabs">
-              {state.drivers.map((d) => (
-                <button
-                  className={`driver-tab${d.id === driver.id ? ' active' : ''}`}
-                  key={d.id}
-                  onClick={() => setState((s) => ({ ...s, selectedDriverId: d.id }))}
-                >
-                  <span className={`dot ${driverStatus[d.id] === 'bad' ? 'bad' : driverStatus[d.id] === 'warn' ? 'warn' : ''}`} />
-                  {d.name}
-                </button>
-              ))}
-              <button className="driver-tab" onClick={() => setDialog({ kind: 'add-driver' })}>
-                + Driver
+            <div className="mode-tabs">
+              <button
+                className={`mode-tab${state.appMode === 'drivers' ? ' active' : ''}`}
+                onClick={() => setState((s) => ({ ...s, appMode: 'drivers' }))}
+              >
+                Drivers
+              </button>
+              <button
+                className={`mode-tab${state.appMode === 'lines' ? ' active' : ''}`}
+                onClick={() => setState((s) => ({ ...s, appMode: 'lines' }))}
+              >
+                Linehaul duty lines
               </button>
             </div>
-            <div className="spacer" />
-            <button className="btn ghost small" onClick={() => setDialog({ kind: 'rename-driver' })}>
-              Rename
-            </button>
-            <button
-              className="btn ghost small"
-              onClick={() => setDialog({ kind: 'remove-driver' })}
-              disabled={state.drivers.length === 1}
-            >
-              Remove
-            </button>
           </div>
         </div>
 
-        <div className="card">
-          <div className="row">
-            <div>
-              <label className="field-label" htmlFor="week">
-                Week being planned (starts Sunday)
-              </label>
-              <input
-                id="week"
-                className="text-input"
-                type="date"
-                value={planningFrom}
-                onChange={(e) =>
-                  setState((s) => ({
-                    ...s,
-                    planningWeekStart: weekStart(e.target.value || todayISO()),
-                  }))
-                }
-              />
+        {state.appMode === 'drivers' && (
+          <>
+            <div className="lines-layout">
+              <div className="lines-main">
+                <div className="card lines-toolbar">
+                  <div className="row">
+                    <div className="driver-tabs">
+                      {state.drivers.map((d) => (
+                        <button
+                          className={`driver-tab${d.id === driver.id ? ' active' : ''}`}
+                          key={d.id}
+                          onClick={() => setState((s) => ({ ...s, selectedDriverId: d.id }))}
+                        >
+                          <span
+                            className={`dot ${driverStatus[d.id] === 'bad' ? 'bad' : driverStatus[d.id] === 'warn' ? 'warn' : ''}`}
+                          />
+                          {d.name}
+                        </button>
+                      ))}
+                      <button className="driver-tab" onClick={() => setDialog({ kind: 'add-driver' })}>
+                        + Driver
+                      </button>
+                    </div>
+                    <div className="spacer" />
+                    <button className="btn ghost" onClick={() => setDialog({ kind: 'rename-driver' })}>
+                      Rename
+                    </button>
+                    <button
+                      className="btn ghost"
+                      onClick={() => setDialog({ kind: 'remove-driver' })}
+                      disabled={state.drivers.length === 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card lines-toolbar">
+                  <div className="row">
+                    <div>
+                      <label className="field-label" htmlFor="week">
+                        Week being planned (starts Sunday)
+                      </label>
+                      <input
+                        id="week"
+                        className="text-input"
+                        type="date"
+                        value={planningFrom}
+                        onChange={(e) =>
+                          setState((s) => ({
+                            ...s,
+                            planningWeekStart: weekStart(e.target.value || todayISO()),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="spacer" />
+                    <button className="btn ghost" onClick={() => setShowImport(true)}>
+                      Paste from Excel
+                    </button>
+                    <button
+                      className="btn ghost"
+                      onClick={() => download(`bfm-${planningFrom}.csv`, toCsv(state.drivers, windowFrom, windowTo))}
+                    >
+                      Export CSV
+                    </button>
+                    <button className="btn ghost" onClick={() => setDialog({ kind: 'clear-week' })}>
+                      Clear week
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card lines-card">
+                  <RosterGrid
+                    driver={driver}
+                    dates={dates}
+                    result={result}
+                    planningFrom={planningFrom}
+                    focusedDate={focusedDate}
+                    hint={hint}
+                    onFocusDate={setFocusedDate}
+                    onChange={onCellChange}
+                  />
+                </div>
+              </div>
+
+              <div className="lines-side">
+                <DriverSummary driverName={driver.name} result={result} />
+              </div>
             </div>
-            <div className="spacer" />
-            <button className="btn ghost small" onClick={() => setShowImport(true)}>
-              Paste from Excel
-            </button>
-            <button
-              className="btn ghost small"
-              onClick={() => download(`bfm-${planningFrom}.csv`, toCsv(state.drivers, windowFrom, windowTo))}
-            >
-              Export CSV
-            </button>
-            <button className="btn ghost small" onClick={() => setDialog({ kind: 'clear-week' })}>
-              Clear week
-            </button>
-          </div>
 
-          <div style={{ marginTop: 14 }}>
-            <RosterGrid
-              driver={driver}
-              dates={dates}
-              result={result}
-              planningFrom={planningFrom}
-              focusedDate={focusedDate}
-              hint={hint}
-              onFocusDate={setFocusedDate}
-              onChange={onCellChange}
-            />
-          </div>
-        </div>
+            <FindingsPanel findings={result.findings} />
+          </>
+        )}
 
-        <FindingsPanel findings={result.findings} />
+        {state.appMode === 'lines' && selectedLine && (
+          <div className="lines-layout">
+            <div className="lines-main">
+              <div className="card lines-toolbar">
+                <div className="row">
+                  <div className="mode-tabs">
+                    <button
+                      className={`mode-tab${lineMode === 'standard' ? ' active' : ''}`}
+                      onClick={() => switchLineMode('standard')}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      className={`mode-tab${lineMode === 'daylight' ? ' active' : ''}`}
+                      onClick={() => switchLineMode('daylight')}
+                    >
+                      Daylight saving
+                    </button>
+                  </div>
+                  <div className="spacer" />
+                  <button className="btn ghost" onClick={addLine}>
+                    + Line
+                  </button>
+                  <button
+                    className="btn ghost"
+                    onClick={() => download(`bfm-linehaul-${lineMode}.csv`, linesToCsv(currentLines, lineMode))}
+                  >
+                    Export CSV
+                  </button>
+                  <button className="btn ghost" onClick={() => setDialog({ kind: 'reset-lines' })}>
+                    Reset to spreadsheet
+                  </button>
+                </div>
+
+                <div className="summary-strip">
+                  <div className="summary-stat">
+                    <span className="n">{lineSummary.total}</span>
+                    <span className="l">duty lines</span>
+                  </div>
+                  <div className="summary-stat">
+                    <span className="n bad">{lineSummary.breach}</span>
+                    <span className="l">breach BFM</span>
+                  </div>
+                  <div className="summary-stat">
+                    <span className="n warn">{lineSummary.incomplete}</span>
+                    <span className="l">need attention</span>
+                  </div>
+                  <div className="summary-stat">
+                    <span className="n" style={{ color: 'var(--green)' }}>
+                      {lineSummary.ok}
+                    </span>
+                    <span className="l">clear</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card lines-card">
+                <LineGrid
+                  lines={currentLines}
+                  mode={lineMode}
+                  selectedLineId={selectedLine.id}
+                  onSelect={(id) => setState((s) => ({ ...s, selectedLineId: id }))}
+                  onChange={onLineCellChange}
+                />
+              </div>
+            </div>
+
+            <div className="lines-side">
+              <LineDetail line={selectedLine} mode={lineMode} />
+            </div>
+          </div>
+        )}
       </main>
 
       {showRules && <RulesHelp onClose={() => setShowRules(false)} />}
@@ -290,6 +451,15 @@ export default function App() {
           confirmLabel="Clear"
           onCancel={() => setDialog(null)}
           onConfirm={clearWeek}
+        />
+      )}
+      {dialog?.kind === 'reset-lines' && (
+        <ConfirmDialog
+          title="Reset to the spreadsheet"
+          message={`Discard your edits to the ${lineMode === 'daylight' ? 'daylight saving' : 'standard'} lines and reload the 36 duties from the PAYS roster? This can't be undone.`}
+          confirmLabel="Reset"
+          onCancel={() => setDialog(null)}
+          onConfirm={resetLines}
         />
       )}
     </>

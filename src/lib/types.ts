@@ -42,7 +42,6 @@ export interface WorkSegment {
 export type Severity = 'violation' | 'warning' | 'info';
 
 export type RuleId =
-  | 'SHIFT_TOO_LONG'
   | 'R4_24H_WORK'
   | 'R4_24H_REST'
   | 'R5_7DAY_NIGHT'

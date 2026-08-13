@@ -12,14 +12,14 @@ function driver(): Driver {
 }
 
 describe('latestFinish', () => {
-  it('runs out to the 17-hour working-day span, not just the 14-hour work cap', () => {
-    // Work time caps at 14h well before that, but the 7-continuous-hours-rest
-    // rule is what actually ends the working day — at 24h - 7h = 17h of span,
-    // with the extra time absorbed as in-shift rest.
+  it('runs out at the 14-hour work cap — a 15-hour span, break included', () => {
+    // With a 60-minute break on every duty, 15 hours of span is 14 hours of
+    // work. The working day could legally run to 17 hours of span before the
+    // 7-continuous-hours-rest rule bites, but the work cap gets there first.
     const d = driver();
     const r = latestFinish(d, addDays(START, 15), '06:00', WIN);
-    expect(r?.finish).toBe('23:00');
-    expect(r?.spanMins).toBe(17 * 60);
+    expect(r?.finish).toBe('21:00');
+    expect(r?.spanMins).toBe(15 * 60);
   });
 
   it('is shortened by an adjoining shift inside the same 24-hour window', () => {
@@ -37,7 +37,7 @@ describe('latestFinish', () => {
     let d = driver();
     d = setDay(d, addDays(START, 18), { start: '00:15', finish: '18:00', code: null });
     const r = latestFinish(d, addDays(START, 15), '06:00', WIN);
-    expect(r?.finish).toBe('23:00');
+    expect(r?.finish).toBe('21:00');
   });
 });
 

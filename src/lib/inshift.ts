@@ -1,79 +1,56 @@
 /**
- * In-shift rest requirement (BFM solo, rules 1-4).
+ * In-shift rest.
  *
- * The regulation fixes how much rest must sit *inside* a shift, purely as a
- * function of how long the shift is:
+ * Work time is the span from clock on to clock off, less the duty's break. The
+ * planner types a start and a finish and the work time follows.
  *
- *   in any 6h15  ->  max 6h00 work    (15 continuous minutes rest)
- *   in any 9h00  ->  max 8h30 work    (30 minutes, in blocks of 15)
- *   in any 12h00 ->  max 11h00 work   (60 minutes, in blocks of 15)
- *   in any 24h00 ->  max 14h00 work
+ * How long the break is depends on how long the duty is. The sizes below are
+ * taken from the PAYS linehaul roster, and they explain every one of the 153
+ * duties in it: everything from 8h40 up to 10h30 carries 30 minutes, and
+ * everything from 11h40 up to 14h45 carries an hour.
  *
- * So a planner who types only a start and a finish has already determined the
- * driver's work time: work = span - the minimum rest the span forces.
+ * The 11h30 boundary is not arbitrary. The regulation caps work at 11 hours in
+ * any 12-hour period, so a 30-minute break stops being enough the moment the
+ * span passes 11h30 — beyond that the duty has to give the full hour.
  *
- * We find that minimum by simulating the shift minute by minute, working
- * whenever it is legal to do so and inserting a 15-minute rest block whenever
- * it is not. Working as late as possible is optimal for these sliding-window
- * caps, so the result is the true minimum — and it reproduces the published
- * table exactly (375 -> 360 work, 540 -> 510, 720 -> 660).
+ *   span <= 6h00   ->   no break     (under the 6¼-hour rule's reach)
+ *   span <= 11h30  ->   30 minutes
+ *   span >  11h30  ->   60 minutes
+ *
+ * These also clear the regulation's own in-shift rest requirements outright —
+ * 15 minutes past 6h15, 30 minutes past 9 hours, 60 minutes past 12 — which is
+ * why those three limits are not validated separately.
+ *
+ * The 14-hour ceiling is deliberately *not* applied here. A span long enough to
+ * push work time past 14 hours is a real breach of the 24-hour rule, and the
+ * validator reports it as one rather than quietly absorbing it into a longer
+ * break the roster does not actually give.
  */
 
-/** [window length, max work time within that window], both in minutes. */
-export const WORK_WINDOWS: ReadonlyArray<readonly [number, number]> = [
-  [375, 360], // 6h15  -> 6h00
-  [540, 510], // 9h00  -> 8h30
-  [720, 660], // 12h00 -> 11h00
-  [1440, 840], // 24h00 -> 14h00
-];
+/** Longest span that needs no break at all, in minutes. */
+export const NO_BREAK_MAX_SPAN = 6 * 60;
 
-/** Rest, once required, must be taken in blocks of at least 15 continuous minutes. */
-export const REST_BLOCK_MINS = 15;
+/** Longest span a 30-minute break covers: past this, work would top 11 hours. */
+export const SHORT_BREAK_MAX_SPAN = 11 * 60 + 30;
+
+export const SHORT_BREAK_MINS = 30;
+export const LONG_BREAK_MINS = 60;
 
 export interface ShiftRest {
-  /** Minimum in-shift rest the span forces, in minutes. */
+  /** In-shift rest, in minutes. */
   restMins: number;
   /** span - restMins. */
   workMins: number;
 }
 
-const cache = new Map<number, ShiftRest>();
+/** The break a duty of this length carries, in minutes. */
+export function breakForSpan(spanMins: number): number {
+  if (spanMins <= NO_BREAK_MAX_SPAN) return 0;
+  return spanMins <= SHORT_BREAK_MAX_SPAN ? SHORT_BREAK_MINS : LONG_BREAK_MINS;
+}
 
 export function shiftRest(spanMins: number): ShiftRest {
   const span = Math.max(0, Math.round(spanMins));
-  const hit = cache.get(span);
-  if (hit) return hit;
-
-  // cum[t] = work minutes in [0, t). Time before the shift starts is rest,
-  // which is why windows that reach back past minute 0 simply see less work.
-  const cum = new Int32Array(span + 1);
-  let resting = 0;
-
-  for (let t = 0; t < span; t++) {
-    let canWork = resting === 0;
-    if (canWork) {
-      const next = cum[t] + 1;
-      for (const [len, cap] of WORK_WINDOWS) {
-        const from = t - len + 1;
-        const prior = from <= 0 ? 0 : cum[from];
-        if (next - prior > cap) {
-          canWork = false;
-          break;
-        }
-      }
-    }
-    if (canWork) {
-      cum[t + 1] = cum[t] + 1;
-    } else {
-      cum[t + 1] = cum[t];
-      // Rest is taken in whole 15-minute blocks; if the window still has not
-      // slid far enough when the block ends, the next iteration adds another.
-      resting = resting === 0 ? REST_BLOCK_MINS - 1 : resting - 1;
-    }
-  }
-
-  const workMins = cum[span];
-  const out: ShiftRest = { restMins: span - workMins, workMins };
-  cache.set(span, out);
-  return out;
+  const restMins = breakForSpan(span);
+  return { restMins, workMins: span - restMins };
 }

@@ -54,29 +54,67 @@ describe('parseHHMM', () => {
 
 /* ------------------------------------------------- in-shift rest table */
 
-describe('in-shift rest requirement', () => {
-  it('reproduces the published BFM solo table exactly', () => {
-    expect(shiftRest(6 * 60 + 15)).toEqual({ restMins: 15, workMins: 360 }); // 6h15 -> 6h
-    expect(shiftRest(9 * 60)).toEqual({ restMins: 30, workMins: 510 }); // 9h -> 8h30
-    expect(shiftRest(12 * 60)).toEqual({ restMins: 60, workMins: 660 }); // 12h -> 11h
+describe('in-shift rest', () => {
+  it('gives every span in the PAYS linehaul roster the break it actually carries', () => {
+    // Sampled straight from the roster: these are the only durations it uses.
+    for (const span of [8 * 60 + 40, 9 * 60 + 10, 9 * 60 + 25, 9 * 60 + 45, 10 * 60 + 30]) {
+      expect(shiftRest(span).restMins).toBe(30);
+    }
+    for (const span of [11 * 60 + 40, 12 * 60 + 30, 13 * 60 + 45, 14 * 60 + 45]) {
+      expect(shiftRest(span).restMins).toBe(60);
+    }
   });
 
-  it('never requires rest inside a short shift', () => {
-    expect(shiftRest(6 * 60).restMins).toBe(0);
-    expect(shiftRest(0).restMins).toBe(0);
+  it('switches to the hour once 30 minutes would leave more than 11 hours work', () => {
+    // The regulation caps work at 11h in any 12h period, so 11h30 of span is
+    // the last point a 30-minute break can cover.
+    expect(shiftRest(11 * 60 + 30)).toEqual({ restMins: 30, workMins: 11 * 60 });
+    expect(shiftRest(11 * 60 + 35).restMins).toBe(60);
   });
 
-  it('caps work time at 14 hours however long the span is', () => {
-    expect(shiftRest(20 * 60).workMins).toBe(LIMITS.work24);
-    expect(shiftRest(24 * 60).workMins).toBe(LIMITS.work24);
+  it('clears the regulation\'s own in-shift rest requirements', () => {
+    for (const [span, required] of [
+      [6 * 60 + 15, 15],
+      [9 * 60, 30],
+      [12 * 60, 60],
+    ]) {
+      expect(shiftRest(span).restMins).toBeGreaterThanOrEqual(required);
+    }
   });
 
-  it('is monotonic in the span', () => {
-    let prev = 0;
-    for (let s = 0; s <= 24 * 60; s += 5) {
-      const w = shiftRest(s).workMins;
-      expect(w).toBeGreaterThanOrEqual(prev);
-      prev = w;
+  it('does not cap work time — a span too long to be legal stays too long', () => {
+    // Absorbing the excess into a longer break would hide a real breach of the
+    // 24-hour rule behind rest the roster does not actually give.
+    expect(shiftRest(16 * 60).workMins).toBe(15 * 60);
+    expect(shiftRest(16 * 60).workMins).toBeGreaterThan(LIMITS.work24);
+  });
+
+  it('asks for no break on a span too short to need one', () => {
+    expect(shiftRest(6 * 60)).toEqual({ restMins: 0, workMins: 360 });
+    expect(shiftRest(0)).toEqual({ restMins: 0, workMins: 0 });
+  });
+
+  it('steps down at each break boundary, and that is deliberate', () => {
+    // Crossing into a longer break really does mean less work: the 11h40 duty
+    // is on the roster at 10h40 of work while the 11h30 one is at 11h. The
+    // step is the policy, not an artefact, so it is pinned here rather than
+    // smoothed away — smoothing it would over-count the single most common
+    // duty on the roster (BPF-C-BPF, 11h40) and raise false breaches.
+    expect(shiftRest(11 * 60 + 30).workMins).toBe(11 * 60);
+    expect(shiftRest(11 * 60 + 40).workMins).toBe(10 * 60 + 40);
+  });
+
+  it('rises with the span everywhere inside a band', () => {
+    for (const [from, to] of [
+      [6 * 60 + 5, 11 * 60 + 30],
+      [11 * 60 + 35, 24 * 60],
+    ]) {
+      let prev = -1;
+      for (let s = from; s <= to; s += 5) {
+        const w = shiftRest(s).workMins;
+        expect(w).toBeGreaterThan(prev);
+        prev = w;
+      }
     }
   });
 });
@@ -89,10 +127,8 @@ describe('buildSegments', () => {
     expect((seg.endMs - seg.startMs) / 3_600_000).toBe(8);
   });
 
-  it('derives work time as span minus the rest the span forces', () => {
-    // 00:15 -> 11:40 is an 11h25 span. Two 15-minute breaks are enough: the
-    // 12-hour window that holds the shift also holds 35 minutes of rest either
-    // side of it, so the 60-minute figure only bites at a full 12-hour span.
+  it('derives work time as the span less the duty\'s break', () => {
+    // 00:15 -> 11:40 is an 11h25 span — just inside the 30-minute band.
     const [seg] = buildSegments([{ date: START, start: '00:15', finish: '11:40', code: null }]);
     expect(seg.restMins).toBe(30);
     const spanMins = (seg.endMs - seg.startMs) / 60_000;
@@ -140,8 +176,8 @@ describe('a normal roster', () => {
     expect(rules(normal)).toEqual([]);
   });
 
-  it('reports work time net of the required in-shift rest', () => {
-    // A 10h span forces 30 minutes of rest, so 9h30 of work time.
+  it('reports work time net of the duty\'s break', () => {
+    // A 10h span sits in the 30-minute band, so 9h30 of work time.
     expect(run(normal).stats[addDays(START, 1)].workMins).toBe(570);
   });
 });
@@ -150,9 +186,16 @@ describe('a normal roster', () => {
 
 describe('24-hour rule — maximum work time', () => {
   it('accepts a 14-hour work day', () => {
-    // 15h05 span -> exactly 14h work once the required rest is taken.
-    const d = driver({ [addDays(START, 1)]: ['06:00', '21:05'] });
+    // 15h span less the hour's break is exactly 14h of work — right on the limit.
+    const d = driver({ [addDays(START, 1)]: ['06:00', '21:00'] });
     expect(rules(d)).toEqual([]);
+  });
+
+  it('catches a single duty long enough to break the 14-hour cap', () => {
+    // 16h span -> 15h work. The old model absorbed the excess into a longer
+    // break and stayed silent; the roster does not give that break.
+    const d = driver({ [addDays(START, 1)]: ['06:00', '22:00'] });
+    expect(rules(d)).toContain('R4_24H_WORK');
   });
 
   it('catches two shifts inside 24 hours that add up to more than 14 hours', () => {
@@ -199,8 +242,9 @@ describe('24-hour rule — 7 continuous hours rest', () => {
 
 describe('7-day rule — long/night work time', () => {
   it('counts work between midnight and 6am', () => {
-    // 00:00-06:00 every day is 6h of night work; 7 days = 42h > 36h.
-    const d = driver(repeat(addDays(START, 1), 7, '00:00', '06:00'));
+    // An 8h span is 7h of work, of which the 00:00-06:00 stretch carries
+    // 5h15 of night work; seven of those passes 36h.
+    const d = driver(repeat(addDays(START, 1), 7, '00:00', '08:00'));
     expect(rules(d)).toContain('R5_7DAY_NIGHT');
   });
 
@@ -210,7 +254,7 @@ describe('7-day rule — long/night work time', () => {
   });
 
   it('counts work past the 12th hour of a working day as long work time', () => {
-    const d = driver({ [addDays(START, 1)]: ['06:00', '21:05'] });
+    const d = driver({ [addDays(START, 1)]: ['06:00', '21:00'] });
     const s = run(d).stats[addDays(START, 1)];
     // 14h work, so 2h sits beyond the 12-hour mark, none of it at night.
     expect(s.longNightMins).toBeCloseTo(120, 0);
@@ -255,6 +299,22 @@ describe('14-day rule — 24 continuous hours rest', () => {
     });
     expect(rules(d)).not.toContain('R6_84H_RESET');
   });
+
+  it('catches 84 hours worked with no 24-hour rest yet, even before the window has seen one', () => {
+    // Regression: the 84-hour counter used to only start ticking once the
+    // first 24-hour rest inside the window had already happened, so a driver
+    // who blows past 84 hours before ever getting a full day off went
+    // undetected. 8 x 12h spans = 88 hours, no break anywhere.
+    const d = driver(repeat(START, 8, '06:00', '18:00'));
+    expect(rules(d)).toContain('R6_84H_RESET');
+  });
+
+  it('does not flag a driver who is still under 84 hours with no rest yet', () => {
+    // 6 x 12h spans = 66 hours — under the limit, so this must stay quiet
+    // even though no 24-hour rest has occurred yet either.
+    const d = driver(repeat(START, 6, '06:00', '18:00'));
+    expect(rules(d)).not.toContain('R6_84H_RESET');
+  });
 });
 
 describe('14-day rule — night rest breaks', () => {
@@ -273,6 +333,28 @@ describe('14-day rule — night rest breaks', () => {
     const d = driver(repeat(START, 21, '22:00', '08:00'));
     const n = run(d).findings.filter((f) => f.ruleId === 'R6_NIGHT_RESTS').length;
     expect(n).toBe(1);
+  });
+
+  it('counts a night rest break that falls on the very last day of the window', () => {
+    // Regression: the last night's rest break runs to 08:00 the morning AFTER
+    // the window closes. A driver working nights on days 1-7 and free on
+    // 8-21 has 4 genuinely free nights (18-21), but the free interval used to
+    // be clipped at the window boundary, so night 21 could never qualify and
+    // the fortnight was reported one short.
+    const d = driver(repeat(addDays(START, 1), 7, '22:00', '06:00'));
+    const win = run(d);
+    expect(win.stats[addDays(START, 20)].nightRestBreak).toBe(true);
+    expect(rules(d)).not.toContain('R6_NIGHT_RESTS');
+  });
+
+  it('keeps the most severe rolling-window finding when deduping', () => {
+    // 17 nights on shift means the 14-day windows see anywhere from 0 to 3
+    // free nights depending on where they fall. Dedupe must report the worst
+    // one (0), not whichever window the scanner happened to reach first.
+    const d = driver(repeat(addDays(START, 1), 17, '22:00', '06:00'));
+    const findings = run(d).findings.filter((f) => f.ruleId === 'R6_NIGHT_RESTS');
+    expect(findings).toHaveLength(1);
+    expect(findings[0].actualMins).toBe(0);
   });
 });
 
@@ -304,5 +386,57 @@ describe('incomplete history', () => {
   it('says nothing when the whole window is filled in', () => {
     const d = driver(repeat(START, 21, '06:00', '12:00'));
     expect(run(d).findings.some((f) => f.ruleId === 'DATA_SHORT_HISTORY')).toBe(false);
+  });
+});
+
+/* ------------------------------------------- the 84-hour counter resetting */
+
+describe('the 84-hour counter and rostered days off', () => {
+  /** Days 0-4 on `before`, day 5 off, days 6-11 on `after`. */
+  function withInsertedRdo(before: [string, string], after: [string, string]): Driver {
+    const shifts: Record<string, [string, string] | 'RDO'> = {};
+    for (let i = 0; i < 5; i++) shifts[addDays(START, i)] = before;
+    shifts[addDays(START, 5)] = 'RDO';
+    for (let i = 6; i < 12; i++) shifts[addDays(START, i)] = after;
+    return driver(shifts);
+  }
+
+  const rdoDay = addDays(START, 5);
+  const afterRdo = addDays(START, 6);
+
+  it('resets across a day off between day shifts', () => {
+    const s = run(withInsertedRdo(['06:00', '18:00'], ['06:00', '18:00'])).stats;
+    expect(s[rdoDay].since24RestMins).toBe(0);
+    expect(s[afterRdo].since24RestMins).toBe(s[afterRdo].workMins);
+  });
+
+  it('resets across a day off between night shifts', () => {
+    // Regression: the night shift finishes at 08:00 ON the rostered day off,
+    // so that day used to keep showing the pre-break total even though a full
+    // 38 hours of rest followed and the counter had in fact been cleared.
+    const s = run(withInsertedRdo(['22:00', '08:00'], ['22:00', '08:00'])).stats;
+    expect(s[rdoDay].rest24).toBe(true);
+    expect(s[rdoDay].since24RestMins).toBe(0);
+  });
+
+  it('resets when the day off straddles a change of shift pattern', () => {
+    const s = run(withInsertedRdo(['14:00', '23:00'], ['00:15', '11:40'])).stats;
+    expect(s[rdoDay].since24RestMins).toBe(0);
+  });
+
+  it('does NOT reset when the day off yields less than 24 continuous hours', () => {
+    // Night finishing 08:00 on the day off, back on at 06:00 the next morning,
+    // is only 22 hours of rest — short of the 24 the reset requires.
+    const s = run(withInsertedRdo(['22:00', '08:00'], ['06:00', '18:00'])).stats;
+    expect(s[rdoDay].rest24).toBe(false);
+    expect(s[rdoDay].since24RestMins).toBeGreaterThan(0);
+    expect(s[afterRdo].since24RestMins).toBeGreaterThan(s[rdoDay].since24RestMins);
+  });
+
+  it('keeps the rolling 14-day total climbing through a day off', () => {
+    // The 84-hour counter resets; the 144-hour limit is a rolling total and
+    // must not, however many days off are taken.
+    const s = run(withInsertedRdo(['06:00', '18:00'], ['06:00', '18:00'])).stats;
+    expect(s[afterRdo].rolling14WorkMins).toBeGreaterThan(s[rdoDay].rolling14WorkMins);
   });
 });
