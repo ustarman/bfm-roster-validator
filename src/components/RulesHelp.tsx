@@ -8,13 +8,13 @@ const BLOCKS: Block[] = [
   {
     title: 'How work time is worked out from the times you type',
     plain:
-      'Work time is clock on to clock off, less the duty\'s break. Duties up to 11h30 of span carry 30 minutes; longer ones carry an hour — the same two sizes the linehaul roster uses. The switch at 11h30 is where a 30-minute break would leave more than 11 hours of work, which the 12-hour rule does not allow. Note this means a longer duty can show less work time: an 11h30 span is 11 hours of work, an 11h40 span only 10h40, because it buys the full hour\'s break.',
+      'Every duty carries a flat 60-minute break, whatever its length — a welfare allowance, not just the regulation\'s own minimum. So work time is simply clock on to clock off, less that hour. A 10-hour span is 9 hours of work time; a 15-hour span is 14 hours, the most a solo driver can do in a day.',
     law: 'In any 6¼ hours: 6 hours work time. In any 9 hours: 8½ hours. In any 12 hours: 11 hours.',
   },
   {
     title: '24-hour rule — 14 hours work, 7 hours continuous rest',
     plain:
-      'Across any 24 hours a driver may work 14 hours, and must get 7 unbroken hours of stationary rest. With the hour\'s break on a long duty that puts the longest legal one at a 15-hour span. The 24 hours are counted from the moment work starts after a major break, so a working day also has to finish within 17 hours of starting. If two shifts are less than 7 hours apart they count as one working day, which is how a short turnaround turns into a breach.',
+      'Across any 24 hours a driver may work 14 hours, and must get 7 unbroken hours of stationary rest. With the hour\'s break included that puts the longest legal duty at a 15-hour span. The 24 hours are counted from the moment work starts after a major break, so a working day also has to finish within 17 hours of starting. If two shifts are less than 7 hours apart they count as one working day, which is how a short turnaround turns into a breach.',
     law: 'In any period of 24 hours: maximum 14 hours work time, minimum 7 continuous hours stationary rest time.',
   },
   {

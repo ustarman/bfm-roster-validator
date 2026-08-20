@@ -120,8 +120,8 @@ describe('validateLine', () => {
   it('reads the settled middle week for the per-day markers', () => {
     const r = validateLine(line(['', '06:00-16:00', '06:00-16:00', '', '', '', '']), 'standard');
     expect(r.nightRest).toHaveLength(7);
-    expect(r.workMins[1]).toBe(570); // 10h span, 30-minute break
-    expect(r.weeklyWorkMins).toBe(2 * 570);
+    expect(r.workMins[1]).toBe(540); // 10h span, 60-minute break
+    expect(r.weeklyWorkMins).toBe(2 * 540);
   });
 });
 

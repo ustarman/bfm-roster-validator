@@ -55,24 +55,19 @@ describe('parseHHMM', () => {
 /* ------------------------------------------------- in-shift rest table */
 
 describe('in-shift rest', () => {
-  it('gives every span in the PAYS linehaul roster the break it actually carries', () => {
-    // Sampled straight from the roster: these are the only durations it uses.
-    for (const span of [8 * 60 + 40, 9 * 60 + 10, 9 * 60 + 25, 9 * 60 + 45, 10 * 60 + 30]) {
-      expect(shiftRest(span).restMins).toBe(30);
-    }
-    for (const span of [11 * 60 + 40, 12 * 60 + 30, 13 * 60 + 45, 14 * 60 + 45]) {
-      expect(shiftRest(span).restMins).toBe(60);
-    }
-  });
-
-  it('switches to the hour once 30 minutes would leave more than 11 hours work', () => {
-    // The regulation caps work at 11h in any 12h period, so 11h30 of span is
-    // the last point a 30-minute break can cover.
-    expect(shiftRest(11 * 60 + 30)).toEqual({ restMins: 30, workMins: 11 * 60 });
-    expect(shiftRest(11 * 60 + 35).restMins).toBe(60);
+  it('takes 60 minutes off every duty, whatever its length', () => {
+    // Confirmed with the depot's rostering contact: it's a flat hour, even
+    // for a duty well under 12 hours — a welfare allowance, not the
+    // regulation's own (shorter) in-shift minimum.
+    expect(shiftRest(6 * 60 + 15)).toEqual({ restMins: 60, workMins: 315 });
+    expect(shiftRest(9 * 60)).toEqual({ restMins: 60, workMins: 480 });
+    expect(shiftRest(12 * 60)).toEqual({ restMins: 60, workMins: 660 });
+    expect(shiftRest(14 * 60)).toEqual({ restMins: 60, workMins: 780 });
   });
 
   it('clears the regulation\'s own in-shift rest requirements', () => {
+    // 60 minutes is more than the 15 / 30 / 60 the 6h15, 9h and 12h windows
+    // ask for, so those rules never need checking separately.
     for (const [span, required] of [
       [6 * 60 + 15, 15],
       [9 * 60, 30],
@@ -89,32 +84,17 @@ describe('in-shift rest', () => {
     expect(shiftRest(16 * 60).workMins).toBeGreaterThan(LIMITS.work24);
   });
 
-  it('asks for no break on a span too short to need one', () => {
-    expect(shiftRest(6 * 60)).toEqual({ restMins: 0, workMins: 360 });
+  it('never returns negative work time for a nonsense span', () => {
+    expect(shiftRest(30)).toEqual({ restMins: 30, workMins: 0 });
     expect(shiftRest(0)).toEqual({ restMins: 0, workMins: 0 });
   });
 
-  it('steps down at each break boundary, and that is deliberate', () => {
-    // Crossing into a longer break really does mean less work: the 11h40 duty
-    // is on the roster at 10h40 of work while the 11h30 one is at 11h. The
-    // step is the policy, not an artefact, so it is pinned here rather than
-    // smoothed away — smoothing it would over-count the single most common
-    // duty on the roster (BPF-C-BPF, 11h40) and raise false breaches.
-    expect(shiftRest(11 * 60 + 30).workMins).toBe(11 * 60);
-    expect(shiftRest(11 * 60 + 40).workMins).toBe(10 * 60 + 40);
-  });
-
-  it('rises with the span everywhere inside a band', () => {
-    for (const [from, to] of [
-      [6 * 60 + 5, 11 * 60 + 30],
-      [11 * 60 + 35, 24 * 60],
-    ]) {
-      let prev = -1;
-      for (let s = from; s <= to; s += 5) {
-        const w = shiftRest(s).workMins;
-        expect(w).toBeGreaterThan(prev);
-        prev = w;
-      }
+  it('is monotonic in the span', () => {
+    let prev = 0;
+    for (let s = 0; s <= 24 * 60; s += 5) {
+      const w = shiftRest(s).workMins;
+      expect(w).toBeGreaterThanOrEqual(prev);
+      prev = w;
     }
   });
 });
@@ -127,12 +107,12 @@ describe('buildSegments', () => {
     expect((seg.endMs - seg.startMs) / 3_600_000).toBe(8);
   });
 
-  it('derives work time as the span less the duty\'s break', () => {
-    // 00:15 -> 11:40 is an 11h25 span — just inside the 30-minute band.
+  it('derives work time as the span less the 60-minute break', () => {
+    // 00:15 -> 11:40 is an 11h25 span, so 10h25 of work time.
     const [seg] = buildSegments([{ date: START, start: '00:15', finish: '11:40', code: null }]);
-    expect(seg.restMins).toBe(30);
+    expect(seg.restMins).toBe(60);
     const spanMins = (seg.endMs - seg.startMs) / 60_000;
-    expect(spanMins - seg.restMins).toBe(655); // 10h55 work
+    expect(spanMins - seg.restMins).toBe(625); // 10h25 work
   });
 
   it('ignores coded days and half-filled rows', () => {
@@ -176,9 +156,9 @@ describe('a normal roster', () => {
     expect(rules(normal)).toEqual([]);
   });
 
-  it('reports work time net of the duty\'s break', () => {
-    // A 10h span sits in the 30-minute band, so 9h30 of work time.
-    expect(run(normal).stats[addDays(START, 1)].workMins).toBe(570);
+  it('reports work time net of the 60-minute break', () => {
+    // A 10h span carries the usual hour's break, so 9h of work time.
+    expect(run(normal).stats[addDays(START, 1)].workMins).toBe(540);
   });
 });
 
